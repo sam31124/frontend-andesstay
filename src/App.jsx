@@ -6,6 +6,7 @@ import Reservations from './pages/Reservations';
 import Catalog from './pages/Catalog';
 import Reports from './pages/Reports';
 import Audit from './pages/Audit';
+import RabbitMQDashboard from './pages/RabbitMQDashboard';
 
 export default function App() {
   const { instance } = useMsal();
@@ -108,6 +109,14 @@ export default function App() {
                   Auditoría
                 </Link>
               )}
+              {userRoles.includes('Admin') && (
+                <Link
+                  to="/rabbitmq"
+                  style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold' }}
+                >
+                  RabbitMQ
+                </Link>
+              )}
             </nav>
           )}
         </div>
@@ -178,6 +187,10 @@ export default function App() {
           <Route
             path="/audit"
             element={isAuthenticated ? <Audit /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/rabbitmq"
+            element={isAuthenticated ? <RabbitMQDashboard /> : <Navigate to="/" replace />}
           />
         </Routes>
       </main>
