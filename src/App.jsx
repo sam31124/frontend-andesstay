@@ -7,6 +7,7 @@ import Catalog from './pages/Catalog';
 import Reports from './pages/Reports';
 import Audit from './pages/Audit';
 import RabbitMQDashboard from './pages/RabbitMQDashboard';
+import KafkaDashboard from './pages/KafkaDashboard';
 
 export default function App() {
   const { instance } = useMsal();
@@ -117,6 +118,14 @@ export default function App() {
                   RabbitMQ
                 </Link>
               )}
+              {userRoles.includes('Admin') && (
+                <Link
+                  to="/kafka"
+                  style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', background: '#e07a5f', padding: '0.2rem 0.5rem', borderRadius: '4px' }}
+                >
+                  Kafka Streaming
+                </Link>
+              )}
             </nav>
           )}
         </div>
@@ -191,6 +200,10 @@ export default function App() {
           <Route
             path="/rabbitmq"
             element={isAuthenticated ? <RabbitMQDashboard /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/kafka"
+            element={isAuthenticated ? <KafkaDashboard /> : <Navigate to="/" replace />}
           />
         </Routes>
       </main>
