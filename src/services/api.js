@@ -2,8 +2,12 @@ import axios from 'axios';
 import { msalInstance } from '../main';
 import { apiTokenRequest } from '../authConfig';
 
+const defaultBaseUrl = localStorage.getItem('ANDESSTAY_API_URL')
+  || import.meta.env.VITE_API_URL
+  || (window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://qap60rytu3.execute-api.us-east-1.amazonaws.com');
+
 const api = axios.create({
-  baseURL: 'https://qap60rytu3.execute-api.us-east-1.amazonaws.com',
+  baseURL: defaultBaseUrl,
 });
 
 api.interceptors.request.use(async (config) => {

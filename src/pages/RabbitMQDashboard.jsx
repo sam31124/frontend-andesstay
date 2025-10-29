@@ -20,6 +20,18 @@ export default function RabbitMQDashboard() {
   // Simulación
   const [simQueue, setSimQueue] = useState('email');
 
+  const [currentBaseUrl, setCurrentBaseUrl] = useState(
+    localStorage.getItem('ANDESSTAY_API_URL') || (window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://qap60rytu3.execute-api.us-east-1.amazonaws.com')
+  );
+
+  const handleSwitchBaseUrl = (newUrl) => {
+    localStorage.setItem('ANDESSTAY_API_URL', newUrl);
+    api.defaults.baseURL = newUrl;
+    setCurrentBaseUrl(newUrl);
+    setFeedback({ type: 'success', message: `Servidor API configurado en: ${newUrl}` });
+    fetchStatusAndLogs();
+  };
+
   const fetchStatusAndLogs = async () => {
     setLoading(true);
     try {
@@ -188,7 +200,15 @@ export default function RabbitMQDashboard() {
             Evaluación Parcial N°3: Mensajería Asíncrona Desacoplada, DLQs y Gestión Dinámica de Topología
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <select
+            value={currentBaseUrl}
+            onChange={(e) => handleSwitchBaseUrl(e.target.value)}
+            style={{ padding: '0.45rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+          >
+            <option value="http://localhost:8080">🌐 Local BFF (localhost:8080)</option>
+            <option value="https://qap60rytu3.execute-api.us-east-1.amazonaws.com">☁️ AWS Cloud Gateway</option>
+          </select>
           <button
             onClick={fetchStatusAndLogs}
             disabled={loading}
