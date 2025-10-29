@@ -3,7 +3,7 @@ import { msalInstance } from '../main';
 import { apiTokenRequest } from '../authConfig';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080',
+  baseURL: 'https://qap60rytu3.execute-api.us-east-1.amazonaws.com',
 });
 
 api.interceptors.request.use(async (config) => {
