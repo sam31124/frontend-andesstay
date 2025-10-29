@@ -20,24 +20,9 @@ export default function RabbitMQDashboard() {
   // Simulación
   const [simQueue, setSimQueue] = useState('email');
 
-  const [currentBaseUrl, setCurrentBaseUrl] = useState('http://localhost:8080');
-
-  const rabbitUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8084${path}` : `${currentBaseUrl}${path}`;
-  const notifyUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8083${path}` : `${currentBaseUrl}${path}`;
-  const resvUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8081${path}` : `${currentBaseUrl}${path}`;
-
-  const handleSwitchBaseUrl = (newUrl) => {
-    setCurrentBaseUrl(newUrl);
-    if (newUrl.includes('execute-api')) {
-      setFeedback({
-        type: 'error',
-        message: 'Aviso Arquitectónico: El Clúster RabbitMQ de 2 nodos y los microservicios de mensajería (8083/8084) corren en Docker local. En AWS EC2 / API Gateway solo están desplegados los endpoints de Reservas y Catálogo debido a las restricciones de memoria de AWS Academy.'
-      });
-    } else {
-      setFeedback({ type: 'success', message: 'Conectado al Clúster RabbitMQ Local (Puertos 8084 / 8083 / Docker)' });
-    }
-    fetchStatusAndLogs();
-  };
+  const rabbitUrl = (path) => `http://localhost:8084${path}`;
+  const notifyUrl = (path) => `http://localhost:8083${path}`;
+  const resvUrl = (path) => `http://localhost:8081${path}`;
 
   const fetchStatusAndLogs = async () => {
     setLoading(true);
@@ -239,14 +224,22 @@ export default function RabbitMQDashboard() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={currentBaseUrl}
-            onChange={(e) => handleSwitchBaseUrl(e.target.value)}
-            style={{ padding: '0.45rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+          <a
+            href="http://localhost:15672"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ padding: '0.45rem 0.8rem', background: '#e9ecef', color: '#333', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '0.85rem', textDecoration: 'none', fontWeight: 'bold' }}
           >
-            <option value="http://localhost:8080">🌐 Local BFF (localhost:8080)</option>
-            <option value="https://qap60rytu3.execute-api.us-east-1.amazonaws.com">☁️ AWS Cloud Gateway</option>
-          </select>
+            💻 UI Local (:15672)
+          </a>
+          <a
+            href="http://54.162.30.246:15672"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ padding: '0.45rem 0.8rem', background: '#ff9900', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '0.85rem', textDecoration: 'none', fontWeight: 'bold' }}
+          >
+            ☁️ UI Cloud AWS (:15672)
+          </a>
           <button
             onClick={fetchStatusAndLogs}
             disabled={loading}
