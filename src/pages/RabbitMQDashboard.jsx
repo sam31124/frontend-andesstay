@@ -20,19 +20,22 @@ export default function RabbitMQDashboard() {
   // Simulación
   const [simQueue, setSimQueue] = useState('email');
 
-  const [currentBaseUrl, setCurrentBaseUrl] = useState(
-    localStorage.getItem('ANDESSTAY_API_URL') || 'http://localhost:8080'
-  );
+  const [currentBaseUrl, setCurrentBaseUrl] = useState('http://localhost:8080');
 
   const rabbitUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8084${path}` : `${currentBaseUrl}${path}`;
   const notifyUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8083${path}` : `${currentBaseUrl}${path}`;
   const resvUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8081${path}` : `${currentBaseUrl}${path}`;
 
   const handleSwitchBaseUrl = (newUrl) => {
-    localStorage.setItem('ANDESSTAY_API_URL', newUrl);
-    api.defaults.baseURL = newUrl;
     setCurrentBaseUrl(newUrl);
-    setFeedback({ type: 'success', message: `Servidor API configurado en: ${newUrl}` });
+    if (newUrl.includes('execute-api')) {
+      setFeedback({
+        type: 'error',
+        message: 'Aviso Arquitectónico: El Clúster RabbitMQ de 2 nodos y los microservicios de mensajería (8083/8084) corren en Docker local. En AWS EC2 / API Gateway solo están desplegados los endpoints de Reservas y Catálogo debido a las restricciones de memoria de AWS Academy.'
+      });
+    } else {
+      setFeedback({ type: 'success', message: 'Conectado al Clúster RabbitMQ Local (Puertos 8084 / 8083 / Docker)' });
+    }
     fetchStatusAndLogs();
   };
 
