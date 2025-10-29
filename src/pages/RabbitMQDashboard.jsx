@@ -21,8 +21,12 @@ export default function RabbitMQDashboard() {
   const [simQueue, setSimQueue] = useState('email');
 
   const [currentBaseUrl, setCurrentBaseUrl] = useState(
-    localStorage.getItem('ANDESSTAY_API_URL') || (window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://qap60rytu3.execute-api.us-east-1.amazonaws.com')
+    localStorage.getItem('ANDESSTAY_API_URL') || 'http://localhost:8080'
   );
+
+  const rabbitUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8084${path}` : `${currentBaseUrl}${path}`;
+  const notifyUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8083${path}` : `${currentBaseUrl}${path}`;
+  const resvUrl = (path) => currentBaseUrl.includes('localhost') ? `http://localhost:8081${path}` : `${currentBaseUrl}${path}`;
 
   const handleSwitchBaseUrl = (newUrl) => {
     localStorage.setItem('ANDESSTAY_API_URL', newUrl);
@@ -37,16 +41,22 @@ export default function RabbitMQDashboard() {
     try {
       // 1. Estado de topología
       try {
-        const topRes = await api.get('/api/rabbit/topology/status');
-        setTopology(topRes.data);
+        const topRes = await fetch(rabbitUrl('/api/rabbit/topology/status'));
+        if (topRes.ok) {
+          const topData = await topRes.json();
+          setTopology(topData);
+        }
       } catch (err) {
         console.warn('No se pudo cargar topología:', err);
       }
 
       // 2. Logs y estadísticas de consumidor / DLQ
       try {
-        const logsRes = await api.get('/api/notify/logs');
-        setLogsData(logsRes.data || { logs: [], successCount: 0, dlqCount: 0, totalCount: 0 });
+        const logsRes = await fetch(notifyUrl('/api/notify/logs'));
+        if (logsRes.ok) {
+          const lData = await logsRes.json();
+          setLogsData(lData || { logs: [], successCount: 0, dlqCount: 0, totalCount: 0 });
+        }
       } catch (err) {
         console.warn('No se pudieron cargar logs de notificación:', err);
       }
@@ -63,57 +73,60 @@ export default function RabbitMQDashboard() {
 
   const handleInitTopology = async () => {
     try {
-      const res = await api.post('/api/rabbit/topology/init');
-      setFeedback({ type: 'success', message: res.data?.message || 'Topología oficial inicializada correctamente.' });
+      const res = await fetch(rabbitUrl('/api/rabbit/topology/init'), { method: 'POST' });
+      const data = await res.json();
+      setFeedback({ type: 'success', message: data?.message || 'Topología oficial inicializada correctamente.' });
       fetchStatusAndLogs();
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error inicializando topología: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error inicializando topología: ' + err.message });
     }
   };
 
   const handleSimulateDlq = async (queueType) => {
     try {
-      const res = await api.post(`/api/reservations/simulate-dlq?queue=${queueType}`);
-      setFeedback({
-        type: 'success',
-        message: `Prueba DLQ ejecutada en [${queueType}]. Mensaje desviado a Dead Letter Queue y auditado.`
+      const res = await fetch(notifyUrl('/api/notify/simulate-send'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queue: queueType, simulateError: true }),
       });
-      fetchStatusAndLogs();
-    } catch (err) {
-      // Si falla vía reservations, intentar directamente vía notify simulate-send
-      try {
-        await api.post('/api/notify/simulate-send', { queue: queueType, simulateError: true });
+      if (res.ok) {
         setFeedback({
           type: 'success',
-          message: `Prueba DLQ ejecutada vía consumidor [${queueType}]. Mensaje auditado en DLQ.`
+          message: `Prueba DLQ ejecutada en [${queueType}]. Mensaje desviado a Dead Letter Queue y auditado.`
         });
         fetchStatusAndLogs();
-      } catch (e) {
-        setFeedback({ type: 'error', message: 'Error simulando DLQ: ' + (err.response?.data?.error || err.message) });
       }
+    } catch (err) {
+      setFeedback({ type: 'error', message: 'Error simulando DLQ: ' + err.message });
     }
   };
 
   const handleSimulateSuccess = async (queueType) => {
     try {
-      await api.post('/api/notify/simulate-send', { queue: queueType, simulateError: false });
-      setFeedback({
-        type: 'success',
-        message: `Mensaje exitoso despachado a la cola [q.cmd.${queueType}] y procesado con ACK.`
+      const res = await fetch(notifyUrl('/api/notify/simulate-send'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queue: queueType, simulateError: false }),
       });
-      fetchStatusAndLogs();
+      if (res.ok) {
+        setFeedback({
+          type: 'success',
+          message: `Mensaje exitoso despachado a la cola [q.cmd.${queueType}] y procesado con ACK.`
+        });
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error enviando mensaje: ' + (err.response?.data?.error || err.message) });
+      setFeedback({ type: 'error', message: 'Error enviando mensaje: ' + err.message });
     }
   };
 
   const handleClearLogs = async () => {
     try {
-      await api.post('/api/notify/clear');
+      await fetch(notifyUrl('/api/notify/clear'), { method: 'POST' });
       setFeedback({ type: 'success', message: 'Historial de auditoría de mensajes limpiado.' });
       fetchStatusAndLogs();
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error limpiando logs.' });
+      setFeedback({ type: 'error', message: 'Error limpiando logs: ' + err.message });
     }
   };
 
@@ -122,12 +135,18 @@ export default function RabbitMQDashboard() {
     e.preventDefault();
     if (!newQueueName.trim()) return;
     try {
-      await api.post('/api/rabbit/queues', { name: newQueueName.trim(), durable: true });
-      setFeedback({ type: 'success', message: `Cola [${newQueueName}] creada exitosamente.` });
-      setNewQueueName('');
-      fetchStatusAndLogs();
+      const res = await fetch(rabbitUrl('/api/rabbit/queues'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newQueueName.trim(), durable: true }),
+      });
+      if (res.ok) {
+        setFeedback({ type: 'success', message: `Cola [${newQueueName}] creada exitosamente.` });
+        setNewQueueName('');
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error creando cola: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error creando cola: ' + err.message });
     }
   };
 
@@ -135,12 +154,14 @@ export default function RabbitMQDashboard() {
     e.preventDefault();
     if (!delQueueName.trim()) return;
     try {
-      await api.delete(`/api/rabbit/queues/${encodeURIComponent(delQueueName.trim())}`);
-      setFeedback({ type: 'success', message: `Cola [${delQueueName}] eliminada.` });
-      setDelQueueName('');
-      fetchStatusAndLogs();
+      const res = await fetch(rabbitUrl(`/api/rabbit/queues/${encodeURIComponent(delQueueName.trim())}`), { method: 'DELETE' });
+      if (res.ok) {
+        setFeedback({ type: 'success', message: `Cola [${delQueueName}] eliminada.` });
+        setDelQueueName('');
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error eliminando cola: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error eliminando cola: ' + err.message });
     }
   };
 
@@ -149,12 +170,18 @@ export default function RabbitMQDashboard() {
     e.preventDefault();
     if (!newExchangeName.trim()) return;
     try {
-      await api.post('/api/rabbit/exchanges', { name: newExchangeName.trim(), type: newExchangeType });
-      setFeedback({ type: 'success', message: `Exchange [${newExchangeName}] (${newExchangeType}) creado.` });
-      setNewExchangeName('');
-      fetchStatusAndLogs();
+      const res = await fetch(rabbitUrl('/api/rabbit/exchanges'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newExchangeName.trim(), type: newExchangeType }),
+      });
+      if (res.ok) {
+        setFeedback({ type: 'success', message: `Exchange [${newExchangeName}] (${newExchangeType}) creado.` });
+        setNewExchangeName('');
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error creando exchange: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error creando exchange: ' + err.message });
     }
   };
 
@@ -162,12 +189,14 @@ export default function RabbitMQDashboard() {
     e.preventDefault();
     if (!delExchangeName.trim()) return;
     try {
-      await api.delete(`/api/rabbit/exchanges/${encodeURIComponent(delExchangeName.trim())}`);
-      setFeedback({ type: 'success', message: `Exchange [${delExchangeName}] eliminado.` });
-      setDelExchangeName('');
-      fetchStatusAndLogs();
+      const res = await fetch(rabbitUrl(`/api/rabbit/exchanges/${encodeURIComponent(delExchangeName.trim())}`), { method: 'DELETE' });
+      if (res.ok) {
+        setFeedback({ type: 'success', message: `Exchange [${delExchangeName}] eliminado.` });
+        setDelExchangeName('');
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error eliminando exchange: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error eliminando exchange: ' + err.message });
     }
   };
 
@@ -176,18 +205,24 @@ export default function RabbitMQDashboard() {
     e.preventDefault();
     if (!bindingExchange.trim() || !bindingQueue.trim()) return;
     try {
-      await api.post('/api/rabbit/bindings', {
-        exchange: bindingExchange.trim(),
-        destinationQueue: bindingQueue.trim(),
-        routingKey: bindingRoutingKey.trim(),
+      const res = await fetch(rabbitUrl('/api/rabbit/bindings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exchange: bindingExchange.trim(),
+          destinationQueue: bindingQueue.trim(),
+          routingKey: bindingRoutingKey.trim(),
+        }),
       });
-      setFeedback({ type: 'success', message: `Binding creado: ${bindingExchange} -> ${bindingQueue} (${bindingRoutingKey})` });
-      setBindingExchange('');
-      setBindingQueue('');
-      setBindingRoutingKey('');
-      fetchStatusAndLogs();
+      if (res.ok) {
+        setFeedback({ type: 'success', message: `Binding creado: ${bindingExchange} -> ${bindingQueue} (${bindingRoutingKey})` });
+        setBindingExchange('');
+        setBindingQueue('');
+        setBindingRoutingKey('');
+        fetchStatusAndLogs();
+      }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error creando binding: ' + (err.response?.data?.message || err.message) });
+      setFeedback({ type: 'error', message: 'Error creando binding: ' + err.message });
     }
   };
 
