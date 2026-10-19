@@ -70,43 +70,33 @@ export default function RabbitMQDashboard() {
     }
   };
 
-  const handleSimulateDlq = async (queueType) => {
+  const handleSimulate = async (queueType, simulateError, target = 'local') => {
+    const isAws = target === 'aws';
     try {
       const res = await fetch(notifyUrl('/api/notify/simulate-send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queue: queueType, simulateError: true }),
+        body: JSON.stringify({ queue: queueType, simulateError, target }),
       });
+      const data = await res.json();
       if (res.ok) {
         setFeedback({
           type: 'success',
-          message: `Prueba DLQ ejecutada en [${queueType}]. Mensaje desviado a Dead Letter Queue y auditado.`
+          message: data?.message || (simulateError
+            ? `Prueba DLQ ejecutada en [${queueType}]. Mensaje desviado a Dead Letter Queue en ${isAws ? 'AWS Cloud' : 'Local'}.`
+            : `Mensaje exitoso despachado a [q.cmd.${queueType}] en ${isAws ? 'AWS Cloud' : 'Local'}.`)
         });
         fetchStatusAndLogs();
+      } else {
+        setFeedback({ type: 'error', message: 'Error: ' + (data?.message || res.statusText) });
       }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Error simulando DLQ: ' + err.message });
+      setFeedback({ type: 'error', message: 'Error simulando envío: ' + err.message });
     }
   };
 
-  const handleSimulateSuccess = async (queueType) => {
-    try {
-      const res = await fetch(notifyUrl('/api/notify/simulate-send'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queue: queueType, simulateError: false }),
-      });
-      if (res.ok) {
-        setFeedback({
-          type: 'success',
-          message: `Mensaje exitoso despachado a la cola [q.cmd.${queueType}] y procesado con ACK.`
-        });
-        fetchStatusAndLogs();
-      }
-    } catch (err) {
-      setFeedback({ type: 'error', message: 'Error enviando mensaje: ' + err.message });
-    }
-  };
+  const handleSimulateDlq = (queueType) => handleSimulate(queueType, true, 'local');
+  const handleSimulateSuccess = (queueType) => handleSimulate(queueType, false, 'local');
 
   const handleClearLogs = async () => {
     try {
@@ -300,37 +290,88 @@ export default function RabbitMQDashboard() {
         </div>
       </div>
 
-      {/* Simulador de Pruebas EP3 */}
+      {/* Simulador de Pruebas EP3 & EP4 (Local & AWS Cloud) */}
       <div style={{ background: '#f8f9fa', padding: '1.2rem', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '2rem' }}>
-        <h3 style={{ margin: '0 0 0.8rem', color: '#0b2545' }}>🧪 Laboratorio de Pruebas de Desacoplamiento & Manejo de DLQ</h3>
-        <p style={{ color: '#555', fontSize: '0.9rem', marginBottom: '1rem' }}>
-          Demuestra en vivo la entrega garantizada, procesamiento asíncrono y desvío de excepciones hacia la Dead Letter Queue (DLQ).
+        <h3 style={{ margin: '0 0 0.8rem', color: '#0b2545' }}>🧪 Laboratorio de Pruebas: Desacoplamiento & Manejo de DLQ</h3>
+        <p style={{ color: '#555', fontSize: '0.9rem', marginBottom: '1.2rem' }}>
+          Demuestra en vivo la entrega garantizada, procesamiento asíncrono y desvío hacia Dead Letter Queues (DLQ) tanto en tu <b>Clúster Local (Docker)</b> como en el <b>Clúster Cloud (AWS EC2)</b>.
         </p>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ fontWeight: 'bold' }}>Cola de Destino:</label>
+
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1.2rem' }}>
+          <label style={{ fontWeight: 'bold', color: '#2c3e50' }}>Cola de Negocio Seleccionada:</label>
           <select
             value={simQueue}
             onChange={(e) => setSimQueue(e.target.value)}
-            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            style={{ padding: '0.5rem 0.8rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.95rem', background: '#fff', fontWeight: '500' }}
           >
-            <option value="email">Email (q.cmd.email / q.cmd.email.dlq)</option>
-            <option value="housekeeping">Housekeeping (q.cmd.housekeeping / q.cmd.housekeeping.dlq)</option>
-            <option value="voucher">Voucher (q.cmd.voucher / q.cmd.voucher.dlq)</option>
+            <option value="email">📧 Email (q.cmd.email / q.cmd.email.dlq)</option>
+            <option value="housekeeping">🧹 Housekeeping (q.cmd.housekeeping / q.cmd.housekeeping.dlq)</option>
+            <option value="voucher">🎫 Voucher (q.cmd.voucher / q.cmd.voucher.dlq)</option>
           </select>
+        </div>
 
-          <button
-            onClick={() => handleSimulateSuccess(simQueue)}
-            style={{ padding: '0.5rem 1rem', background: '#2a9d8f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            ✅ Enviar Mensaje Normal (ACK)
-          </button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem' }}>
+          {/* Bloque Local */}
+          <div style={{ background: '#fff', padding: '1.1rem', borderRadius: '8px', border: '1px solid #b2dfdb', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+              <h4 style={{ margin: 0, color: '#004d40', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                💻 Clúster Local (Docker)
+              </h4>
+              <span style={{ fontSize: '0.75rem', background: '#e0f2f1', color: '#00695c', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 'bold' }}>
+                localhost:5672
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', margin: '0 0 0.8rem' }}>
+              Despacha hacia tu Docker Compose local. El consumidor ejecuta confirmación manual ACK/NACK.
+            </p>
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => handleSimulate(simQueue, false, 'local')}
+                style={{ flex: 1, padding: '0.6rem 0.8rem', background: '#00897b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                title="Despacha un mensaje válido que será procesado con basicAck"
+              >
+                ✅ Normal Local (ACK)
+              </button>
+              <button
+                onClick={() => handleSimulate(simQueue, true, 'local')}
+                style={{ flex: 1, padding: '0.6rem 0.8rem', background: '#d81b60', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                title="Despacha un mensaje inválido que forzará basicNack y desvío a DLQ"
+              >
+                ⚠️ Forzar DLQ Local (NACK)
+              </button>
+            </div>
+          </div>
 
-          <button
-            onClick={() => handleSimulateDlq(simQueue)}
-            style={{ padding: '0.5rem 1rem', background: '#e76f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            ⚠️ Simular Falla & Desvío a DLQ (NACK)
-          </button>
+          {/* Bloque Cloud AWS */}
+          <div style={{ background: '#fffcf5', padding: '1.1rem', borderRadius: '8px', border: '1px solid #ffe082', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+              <h4 style={{ margin: 0, color: '#e65100', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                ☁️ Clúster Cloud (AWS EC2)
+              </h4>
+              <span style={{ fontSize: '0.75rem', background: '#fff3e0', color: '#e65100', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 'bold' }}>
+                54.162.30.246:5672
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', margin: '0 0 0.8rem' }}>
+              Despacha directamente a la nube en AWS. Se refleja en tiempo real en la consola web de AWS.
+            </p>
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => handleSimulate(simQueue, false, 'aws')}
+                style={{ flex: 1, padding: '0.6rem 0.8rem', background: '#ff9900', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                title="Despacha directamente a la cola de negocio en el clúster de AWS EC2"
+              >
+                ☁️ Normal a AWS
+              </button>
+              <button
+                onClick={() => handleSimulate(simQueue, true, 'aws')}
+                style={{ flex: 1, padding: '0.6rem 0.8rem', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                title="Despacha a la cola de mensajes muertos (DLQ) en AWS EC2"
+              >
+                ☁️ Forzar DLQ a AWS
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
